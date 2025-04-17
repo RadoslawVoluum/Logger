@@ -270,14 +270,14 @@ function App() {
                 className="px-3 py-2 border rounded"
                 disabled={isMonitoring}
               >
-                <option value={1}>Auto-save every 1 minute</option>
-                <option value={5}>Auto-save every 5 minutes</option>
-                <option value={10}>Auto-save every 10 minutes</option>
-                <option value={15}>Auto-save every 15 minutes</option>
-                <option value={30}>Auto-save every 30 minutes</option>
-                <option value={45}>Auto-save every 45 minutes</option>
-                <option value={60}>Auto-save every 60 minutes</option>
-                <option value={90}>Auto-save every 90 minutes</option>
+  <option value={1}>Auto-save every 1 minute</option>
+  <option value={5}>Auto-save every 5 minutes</option>
+  <option value={10}>Auto-save every 10 minutes</option>
+  <option value={15}>Auto-save every 15 minutes</option>
+  <option value={30}>Auto-save every 30 minutes</option>
+  <option value={45}>Auto-save every 45 minutes</option>
+  <option value={60}>Auto-save every 60 minutes</option>
+  <option value={90}>Auto-save every 90 minutes</option>
               </select>
             </div>
 
