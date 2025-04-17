@@ -9,7 +9,7 @@ interface LogEntry {
 }
 
 function App() {
-  const [interval, setInterval] = useState<number>(15); // seconds between pings
+  const [pingDelay, setPingDelay] = useState<number>(15); // seconds between pings
   const [autoSaveInterval, setAutoSaveInterval] = useState<number>(5); // minutes between auto-saves
   const [isMonitoring, setIsMonitoring] = useState<boolean>(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -18,21 +18,19 @@ function App() {
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Calculate total downtime in ms
   const calculateTotalDowntime = (currentLogs: LogEntry[]) => {
     const offlineCount = currentLogs.filter(log => !log.status).length;
-    const downtimeMs = offlineCount * interval * 1000;
+    const downtimeMs = offlineCount * pingDelay * 1000;
     setTotalDowntime(downtimeMs);
   };
 
-  // Ping logic
   const checkConnection = async () => {
     const start = performance.now();
     const timestamp = new Date().toISOString();
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), interval * 1000);
+      const timeoutId = setTimeout(() => controller.abort(), pingDelay * 1000);
 
       const response = await fetch(pingUrl, {
         mode: 'no-cors',
@@ -44,8 +42,7 @@ function App() {
       const end = performance.now();
       const responseTime = Math.round(end - start);
 
-      // Mark as offline if response took longer than interval
-      const status = responseTime <= interval * 1000;
+      const status = responseTime <= pingDelay * 1000;
 
       const newLog: LogEntry = {
         timestamp,
@@ -59,7 +56,7 @@ function App() {
         calculateTotalDowntime(updatedLogs);
         return updatedLogs;
       });
-    } catch (error) {
+    } catch {
       const end = performance.now();
       const responseTime = Math.round(end - start);
 
@@ -78,7 +75,6 @@ function App() {
     }
   };
 
-  // Format ms as human readable
   const formatDuration = (ms: number) => {
     const seconds = Math.floor(ms / 1000);
     const minutes = Math.floor(seconds / 60);
@@ -98,28 +94,71 @@ function App() {
     return parts.join(' ') || '0s';
   };
 
-  // Generate downtime summary
   const generateDowntimeSummary = () => {
-    let summary = '';
-    let currentSequence: LogEntry[] = [];
+    let summary = '\nDowntime Periods:\n';
     let sequences: { start: string; count: number }[] = [];
+    let isInDowntime = false;
 
     logs.forEach((log, index) => {
       if (!log.status) {
-        if (currentSequence.length === 0 || index === 0) {
+        if (!isInDowntime) {
           sequences.push({ start: log.timestamp, count: 1 });
-          currentSequence = [log];
+          isInDowntime = true;
         } else {
           sequences[sequences.length - 1].count++;
-          currentSequence.push(log);
         }
       } else {
-        currentSequence = [];
+        isInDowntime = false;
       }
     });
 
-    if (sequences.length > 0) {
-      summary = '\nDowntime Periods:\n';
-      sequences.forEach((seq, index) => {
-        const duration = seq.count * interval;
-        const startTime = new Date
+    sequences.forEach((seq, index) => {
+      const duration = seq.count * pingDelay;
+      const startTime = new Date(seq.start).toLocaleString();
+      summary += `${index + 1}. Start: ${startTime}, Duration: ${duration}s\n`;
+    });
+
+    return summary || 'No downtimes recorded.';
+  };
+
+  useEffect(() => {
+    if (isMonitoring) {
+      checkConnection(); // immediate ping
+      timerRef.current = setInterval(checkConnection, pingDelay * 1000);
+    } else if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
+
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [isMonitoring, pingDelay]);
+
+  return (
+    <div className="p-4">
+      <h1 className="text-xl font-bold mb-4">Ping Monitor</h1>
+      <div className="mb-2">
+        <label className="block">Ping URL:</label>
+        <input
+          className="border px-2 py-1 w-full"
+          value={pingUrl}
+          onChange={(e) => setPingUrl(e.target.value)}
+        />
+      </div>
+      <div className="mb-2">
+        <button
+          className="bg-blue-500 text-white px-4 py-2 rounded"
+          onClick={() => setIsMonitoring(!isMonitoring)}
+        >
+          {isMonitoring ? 'Stop' : 'Start'} Monitoring
+        </button>
+      </div>
+      <div className="mb-2">
+        <p>Total Downtime: {formatDuration(totalDowntime)}</p>
+        <pre className="bg-gray-100 p-2 mt-2">{generateDowntimeSummary()}</pre>
+      </div>
+    </div>
+  );
+}
+
+export default App;
