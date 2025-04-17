@@ -181,24 +181,26 @@ function App() {
   useEffect(() => {
   let autoSaveInterval: NodeJS.Timeout;
 
-  const startAutoSave = () => {
+  if (isMonitoring) {
     autoSaveInterval = setInterval(() => {
       if (logs.length === 0) return;
 
-      // Capture current logs before clearing
-      const logsToSave = [...logs];
-      
-      // Save captured logs
-      saveToFile(logsToSave);
-      
-      // Clear logs only after successful save
-      setLogs([]);
-    }, saveInterval * 60 * 1000);
-  };
+      try {
+        // Take a snapshot of logs to avoid race conditions
+        const logsToSave = [...logs];
+        saveToFile(logsToSave); // Pass logs snapshot to save
+        setLogs([]); // Clear logs only after successful save
+      } catch (error) {
+        console.error('Auto-save failed:', error);
+        // Optionally: show error to user or retry
+      }
+    }, interval * 60 * 1000); // interval is in minutes
+  }
 
-  startAutoSave();
-  return () => clearInterval(autoSaveInterval);
-}, [saveInterval, logs]); // Reset interval when interval time or logs change
+  return () => {
+    if (autoSaveInterval) clearInterval(autoSaveInterval);
+  };
+}, [isMonitoring, interval, logs]); // Reset interval when interval time or logs change
   
   useEffect(() => {
   const handleBeforeUnload = (e: BeforeUnloadEvent) => {
