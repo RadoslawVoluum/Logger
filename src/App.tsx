@@ -277,8 +277,6 @@ function App() {
   <option value={30}>Auto-save every 30 minutes</option>
   <option value={45}>Auto-save every 45 minutes</option>
   <option value={60}>Auto-save every 60 minutes</option>
-  <option value={90}>Auto-save every 90 minutes</option>
-  <option value={120}>Auto-save every 120 minutes</option.
               </select>
             </div>
 
