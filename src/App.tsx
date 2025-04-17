@@ -198,7 +198,7 @@ function App() {
 
   startAutoSave();
   return () => clearInterval(autoSaveInterval);
-}, [saveInterval, logs]);
+}, [saveInterval, logs]); // Reset interval when interval time or logs change
   
   useEffect(() => {
   const handleBeforeUnload = (e: BeforeUnloadEvent) => {
