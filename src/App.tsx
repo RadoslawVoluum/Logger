@@ -10,7 +10,7 @@ interface LogEntry {
 
 function App() {
   const [interval, setInterval] = useState<number>(5);
-  const [autoSaveInterval, setAutoSaveInterval] = useState<number>(15);
+  const [autoSaveInterval, setAutoSaveInterval] = useState<number>(5);
   const [isMonitoring, setIsMonitoring] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [totalDowntime, setTotalDowntime] = useState<number>(0);
