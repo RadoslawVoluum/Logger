@@ -174,6 +174,18 @@ function App() {
       }
     };
   }, []);
+  
+  useEffect(() => {
+  const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+    if (logs.length > 0) {
+      saveToFile();
+    }
+  };
+  window.addEventListener('beforeunload', handleBeforeUnload);
+  return () => {
+    window.removeEventListener('beforeunload', handleBeforeUnload);
+  };
+}, [logs, totalDowntime]);
 
   return (
     <div className="min-h-screen bg-gray-100 p-8">
