@@ -169,14 +169,18 @@ function App() {
   };
 
   const stopMonitoring = () => {
-    setIsMonitoring(false);
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-    }
-    if (autoSaveTimerRef.current) {
-      clearInterval(autoSaveTimerRef.current);
-    }
-  };
+  // Save the logs before stopping and clearing
+  if (logs.length > 0) {
+    saveToFile();
+  }
+  setIsMonitoring(false);
+  if (timerRef.current) {
+    clearInterval(timerRef.current);
+  }
+  if (emailTimerRef.current) {
+    clearInterval(emailTimerRef.current);
+  }
+};
 
   useEffect(() => {
   let autoSaveInterval: NodeJS.Timeout;
@@ -267,15 +271,11 @@ function App() {
 
             <div className="flex items-center gap-4">
               <button
-                onClick={isMonitoring ? stopMonitoring : startMonitoring}
-                className={`px-4 py-2 rounded-md ${
-                  isMonitoring 
-                    ? 'bg-red-500 hover:bg-red-600 text-white' 
-                    : 'bg-green-500 hover:bg-green-600 text-white'
-                }`}
-              >
-                {isMonitoring ? 'Stop Monitoring' : 'Start Monitoring'}
-              </button>
+  onClick={isMonitoring ? stopMonitoring : startMonitoring}
+  className={`px-4 py-2 rounded ${isMonitoring ? 'bg-red-500 text-white' : 'bg-green-500 text-white'}`}
+>
+  {isMonitoring ? 'Stop Monitoring' : 'Start Monitoring'}
+</button>
               
               <button
                 onClick={saveToFile}
