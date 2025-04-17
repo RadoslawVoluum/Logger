@@ -24,48 +24,59 @@ function App() {
     setTotalDowntime(downtimeMs);
   };
 
-  const checkConnection = async () => {
-    const start = performance.now();
-    const timestamp = new Date().toISOString();
+ const checkConnection = async () => {
+  const start = performance.now();
+  const timestamp = new Date().toISOString();
+  
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), interval * 1000);
+
+    const response = await fetch('https://www.google.com/favicon.ico', {
+      mode: 'no-cors',
+      cache: 'no-cache',
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
     
-    try {
-      const response = await fetch(pingUrl, {
-        mode: 'no-cors',
-        cache: 'no-cache'
-      });
-      const end = performance.now();
-      const responseTime = Math.round(end - start);
-      
-      const newLog: LogEntry = {
-        timestamp,
-        status: true,
-        responseTime,
-        ttl: 64
-      };
-      
-      setLogs(prev => {
-        const updatedLogs = [...prev, newLog];
-        calculateTotalDowntime(updatedLogs);
-        return updatedLogs;
-      });
-    } catch (error) {
-      const end = performance.now();
-      const responseTime = Math.round(end - start);
-      
-      const newLog: LogEntry = {
-        timestamp,
-        status: false,
-        responseTime,
-        ttl: null
-      };
-      
-      setLogs(prev => {
-        const updatedLogs = [...prev, newLog];
-        calculateTotalDowntime(updatedLogs);
-        return updatedLogs;
-      });
-    }
-  };
+    const end = performance.now();
+    const responseTime = Math.round(end - start);
+
+    // Mark as offline if response took longer than interval
+    const status = responseTime <= interval * 1000;
+    
+    const newLog: LogEntry = {
+      timestamp,
+      status,
+      responseTime,
+      ttl: 64
+    };
+
+    setLogs(prev => {
+      const updatedLogs = [...prev, newLog];
+      calculateTotalDowntime(updatedLogs);
+      return updatedLogs;
+    });
+
+  } catch (error) {
+    const end = performance.now();
+    const responseTime = Math.round(end - start);
+    
+    const newLog: LogEntry = {
+      timestamp,
+      status: false,
+      responseTime,
+      ttl: null
+    };
+
+    setLogs(prev => {
+      const updatedLogs = [...prev, newLog];
+      calculateTotalDowntime(updatedLogs);
+      return updatedLogs;
+    });
+  }
+};
 
   const formatDuration = (ms: number) => {
     const seconds = Math.floor(ms / 1000);
@@ -118,11 +129,14 @@ function App() {
     return summary;
   };
 
-  const saveToFile = () => {
-    const summary = `Total Downtime: ${formatDuration(totalDowntime)}\n${generateDowntimeSummary()}\n\nDetailed Logs:\n`;
-    const content = summary + logs.map(log => 
-      `${log.timestamp} | Status: ${log.status ? 'Online' : 'Offline'} | Response Time: ${log.responseTime}ms | TTL: ${log.ttl || 'N/A'}`
-    ).join('\n');
+  const saveToFile = (logsToSave: LogEntry[]) => {
+  const summary = `Total Downtime: ${formatDuration(totalDowntime)}\n${generateDowntimeSummary()}\n\nDetailed Logs:\n`;
+  const content = summary + logsToSave.map(log => 
+    `${log.timestamp} | Status: ${log.status ? 'Online' : 'Offline'} | Response Time: ${log.responseTime}ms | TTL: ${log.ttl || 'N/A'}`
+  ).join('\n');
+  
+  // Rest of your existing save logic...
+};
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const blob = new Blob([content], { type: 'text/plain' });
@@ -165,15 +179,26 @@ function App() {
   };
 
   useEffect(() => {
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
-      if (autoSaveTimerRef.current) {
-        clearInterval(autoSaveTimerRef.current);
-      }
-    };
-  }, []);
+  let autoSaveInterval: NodeJS.Timeout;
+
+  const startAutoSave = () => {
+    autoSaveInterval = setInterval(() => {
+      if (logs.length === 0) return;
+
+      // Capture current logs before clearing
+      const logsToSave = [...logs];
+      
+      // Save captured logs
+      saveToFile(logsToSave);
+      
+      // Clear logs only after successful save
+      setLogs([]);
+    }, saveInterval * 60 * 1000);
+  };
+
+  startAutoSave();
+  return () => clearInterval(autoSaveInterval);
+}, [saveInterval, logs]);
   
   useEffect(() => {
   const handleBeforeUnload = (e: BeforeUnloadEvent) => {
