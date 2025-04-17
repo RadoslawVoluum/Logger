@@ -129,7 +129,7 @@ function App() {
     return summary;
   };
 
-  const saveToFile = (logsToSave: LogEntry[]) => {
+ const saveToFile = (logsToSave: LogEntry[]) => {
   const summary = `Total Downtime: ${formatDuration(totalDowntime)}\n${generateDowntimeSummary()}\n\nDetailed Logs:\n`;
   const content = summary + logsToSave.map(log => 
     `${log.timestamp} | Status: ${log.status ? 'Online' : 'Offline'} | Response Time: ${log.responseTime}ms | TTL: ${log.ttl || 'N/A'}`
