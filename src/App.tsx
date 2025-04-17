@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Clock, Wifi, WifiOff, Save, RotateCcw, Mail } from 'lucide-react';
+import { Clock, Wifi, WifiOff, Save, RotateCcw } from 'lucide-react';
 
 interface LogEntry {
   timestamp: string;
@@ -10,17 +10,17 @@ interface LogEntry {
 
 function App() {
   const [interval, setInterval] = useState<number>(5);
+  const [autoSaveInterval, setAutoSaveInterval] = useState<number>(15);
   const [isMonitoring, setIsMonitoring] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [totalDowntime, setTotalDowntime] = useState<number>(0);
-  const [emailAddress, setEmailAddress] = useState<string>('');
-  const [isEmailEnabled, setIsEmailEnabled] = useState(false);
+  const [pingUrl, setPingUrl] = useState<string>('https://www.google.com/favicon.ico');
   const timerRef = useRef<number>();
-  const emailTimerRef = useRef<number>();
+  const autoSaveTimerRef = useRef<number>();
 
   const calculateTotalDowntime = (currentLogs: LogEntry[]) => {
     const offlineCount = currentLogs.filter(log => !log.status).length;
-    const downtimeMs = offlineCount * interval * 1000; // Convert seconds to milliseconds
+    const downtimeMs = offlineCount * interval * 1000;
     setTotalDowntime(downtimeMs);
   };
 
@@ -29,7 +29,7 @@ function App() {
     const timestamp = new Date().toISOString();
     
     try {
-      const response = await fetch('https://www.google.com/favicon.ico', {
+      const response = await fetch(pingUrl, {
         mode: 'no-cors',
         cache: 'no-cache'
       });
@@ -86,36 +86,6 @@ function App() {
     return parts.join(' ') || '0s';
   };
 
-  const sendLogsEmail = async () => {
-    if (!emailAddress || logs.length === 0) return;
-
-    const content = logs.map(log => 
-      `${log.timestamp} | Status: ${log.status ? 'Online' : 'Offline'} | Response Time: ${log.responseTime}ms | TTL: ${log.ttl || 'N/A'}`
-    ).join('\n');
-
-    try {
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-logs`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
-        },
-        body: JSON.stringify({
-          email: emailAddress,
-          logs: content,
-          totalDowntime: formatDuration(totalDowntime),
-          downtimeSummary: generateDowntimeSummary()
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to send email');
-      }
-    } catch (error) {
-      console.error('Error sending email:', error);
-    }
-  };
-
   const generateDowntimeSummary = () => {
     let summary = '';
     let currentSequence: LogEntry[] = [];
@@ -148,13 +118,39 @@ function App() {
     return summary;
   };
 
+  const saveToFile = () => {
+    const summary = `Total Downtime: ${formatDuration(totalDowntime)}\n${generateDowntimeSummary()}\n\nDetailed Logs:\n`;
+    const content = summary + logs.map(log => 
+      `${log.timestamp} | Status: ${log.status ? 'Online' : 'Offline'} | Response Time: ${log.responseTime}ms | TTL: ${log.ttl || 'N/A'}`
+    ).join('\n');
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `connection-log-${timestamp}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    // Clear logs after saving
+    clearLogs();
+  };
+
+  const clearLogs = () => {
+    setLogs([]);
+    setTotalDowntime(0);
+  };
+
   const startMonitoring = () => {
     setIsMonitoring(true);
     checkConnection();
     timerRef.current = window.setInterval(checkConnection, interval * 1000);
     
-    if (isEmailEnabled && emailAddress) {
-      emailTimerRef.current = window.setInterval(sendLogsEmail, 60 * 60 * 1000);
+    if (autoSaveInterval > 0) {
+      autoSaveTimerRef.current = window.setInterval(saveToFile, autoSaveInterval * 60 * 1000);
     }
   };
 
@@ -163,31 +159,9 @@ function App() {
     if (timerRef.current) {
       clearInterval(timerRef.current);
     }
-    if (emailTimerRef.current) {
-      clearInterval(emailTimerRef.current);
+    if (autoSaveTimerRef.current) {
+      clearInterval(autoSaveTimerRef.current);
     }
-  };
-
-  const saveToFile = () => {
-    const summary = `Total Downtime: ${formatDuration(totalDowntime)}\n${generateDowntimeSummary()}\n\nDetailed Logs:\n`;
-    const content = summary + logs.map(log => 
-      `${log.timestamp} | Status: ${log.status ? 'Online' : 'Offline'} | Response Time: ${log.responseTime}ms | TTL: ${log.ttl || 'N/A'}`
-    ).join('\n');
-
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `connection-log-${new Date().toISOString().split('T')[0]}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
-  const clearLogs = () => {
-    setLogs([]);
-    setTotalDowntime(0);
   };
 
   useEffect(() => {
@@ -195,8 +169,8 @@ function App() {
       if (timerRef.current) {
         clearInterval(timerRef.current);
       }
-      if (emailTimerRef.current) {
-        clearInterval(emailTimerRef.current);
+      if (autoSaveTimerRef.current) {
+        clearInterval(autoSaveTimerRef.current);
       }
     };
   }, []);
@@ -210,71 +184,73 @@ function App() {
             Internet Connection Monitor
           </h1>
           
-          <div className="flex items-center gap-4 mb-6">
-            <input
-              type="number"
-              min="1"
-              value={interval}
-              onChange={(e) => setInterval(Number(e.target.value))}
-              className="w-20 px-3 py-2 border rounded"
-              disabled={isMonitoring}
-            />
-            <span className="text-gray-600">seconds interval</span>
-            
-            <button
-              onClick={isMonitoring ? stopMonitoring : startMonitoring}
-              className={`px-4 py-2 rounded-md ${
-                isMonitoring 
-                  ? 'bg-red-500 hover:bg-red-600 text-white' 
-                  : 'bg-green-500 hover:bg-green-600 text-white'
-              }`}
-            >
-              {isMonitoring ? 'Stop Monitoring' : 'Start Monitoring'}
-            </button>
-            
-            <button
-              onClick={saveToFile}
-              className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 flex items-center gap-2"
-              disabled={logs.length === 0}
-            >
-              <Save className="h-4 w-4" />
-              Save Logs
-            </button>
-            
-            <button
-              onClick={clearLogs}
-              className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 flex items-center gap-2"
-              disabled={logs.length === 0}
-            >
-              <RotateCcw className="h-4 w-4" />
-              Clear Logs
-            </button>
-          </div>
-
-          <div className="bg-gray-50 p-4 rounded-md mb-6">
-            <h2 className="text-lg font-semibold mb-2 flex items-center gap-2">
-              <Mail className="h-5 w-5" />
-              Email Notifications
-            </h2>
+          <div className="grid grid-cols-1 gap-4 mb-6">
             <div className="flex items-center gap-4">
               <input
-                type="email"
-                placeholder="Enter email address"
-                value={emailAddress}
-                onChange={(e) => setEmailAddress(e.target.value)}
+                type="text"
+                value={pingUrl}
+                onChange={(e) => setPingUrl(e.target.value)}
+                placeholder="Enter URL to ping"
                 className="flex-1 px-3 py-2 border rounded"
                 disabled={isMonitoring}
               />
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={isEmailEnabled}
-                  onChange={(e) => setIsEmailEnabled(e.target.checked)}
-                  disabled={isMonitoring}
-                  className="form-checkbox h-5 w-5 text-blue-600"
-                />
-                Enable hourly email reports
-              </label>
+            </div>
+            
+            <div className="flex items-center gap-4">
+              <input
+                type="number"
+                min="1"
+                value={interval}
+                onChange={(e) => setInterval(Number(e.target.value))}
+                className="w-20 px-3 py-2 border rounded"
+                disabled={isMonitoring}
+              />
+              <span className="text-gray-600">seconds interval</span>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <select
+                value={autoSaveInterval}
+                onChange={(e) => setAutoSaveInterval(Number(e.target.value))}
+                className="px-3 py-2 border rounded"
+                disabled={isMonitoring}
+              >
+                <option value={15}>Auto-save every 15 minutes</option>
+                <option value={30}>Auto-save every 30 minutes</option>
+                <option value={45}>Auto-save every 45 minutes</option>
+                <option value={60}>Auto-save every 60 minutes</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <button
+                onClick={isMonitoring ? stopMonitoring : startMonitoring}
+                className={`px-4 py-2 rounded-md ${
+                  isMonitoring 
+                    ? 'bg-red-500 hover:bg-red-600 text-white' 
+                    : 'bg-green-500 hover:bg-green-600 text-white'
+                }`}
+              >
+                {isMonitoring ? 'Stop Monitoring' : 'Start Monitoring'}
+              </button>
+              
+              <button
+                onClick={saveToFile}
+                className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 flex items-center gap-2"
+                disabled={logs.length === 0}
+              >
+                <Save className="h-4 w-4" />
+                Save Logs Now
+              </button>
+              
+              <button
+                onClick={clearLogs}
+                className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 flex items-center gap-2"
+                disabled={logs.length === 0}
+              >
+                <RotateCcw className="h-4 w-4" />
+                Clear Logs
+              </button>
             </div>
           </div>
 
