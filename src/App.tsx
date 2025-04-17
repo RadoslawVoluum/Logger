@@ -134,8 +134,18 @@ function App() {
   const content = summary + logsToSave.map(log => 
     `${log.timestamp} | Status: ${log.status ? 'Online' : 'Offline'} | Response Time: ${log.responseTime}ms | TTL: ${log.ttl || 'N/A'}`
   ).join('\n');
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const blob = new Blob([content], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
   
-  // Rest of your existing save logic...
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `connection-log-${timestamp}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 };
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -187,24 +197,26 @@ function App() {
 
   if (isMonitoring) {
     autoSaveInterval = setInterval(() => {
-      if (logs.length === 0) return;
-
-      try {
-        // Take a snapshot of logs to avoid race conditions
-        const logsToSave = [...logs];
-        saveToFile(logsToSave); // Pass logs snapshot to save
-        setLogs([]); // Clear logs only after successful save
-      } catch (error) {
-        console.error('Auto-save failed:', error);
-        // Optionally: show error to user or retry
-      }
-    }, interval * 60 * 1000); // interval is in minutes
+      // Capture current logs using functional update
+      setLogs(prevLogs => {
+        if (prevLogs.length === 0) return prevLogs;
+        
+        // Save logs snapshot (same as manual button logic)
+        const logsToSave = [...prevLogs];
+        saveToFile(logsToSave);
+        
+        // Clear logs AFTER saving
+        return [];
+      });
+    }, autoSaveInterval * 60 * 1000);
   }
 
   return () => {
     if (autoSaveInterval) clearInterval(autoSaveInterval);
   };
-}, [isMonitoring, interval, logs]); // Reset interval when interval time or logs change
+}, [isMonitoring, autoSaveInterval]); 
+// Remove `logs` from dependencies
+
   
   useEffect(() => {
   const handleBeforeUnload = (e: BeforeUnloadEvent) => {
